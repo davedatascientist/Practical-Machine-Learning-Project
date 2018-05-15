@@ -1,0 +1,126 @@
+---
+title: "Practical Machine Learning Project"
+author: "David Bataller Sendra"
+date: "12 de mayo de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Loading Libraries}
+library (caret)
+library (rpart)
+library (rattle)
+library (randomForest)
+```
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+The goal of this project is to use data from accelerometers on the belt, forearm, arm, and dumbbell of 6 young health participants. They were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different ways: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). More information is available from the website here: http://groupware.les.inf.puc-rio.br/bar (see the section on the WLE Dataset).
+
+## Getting and loading the data
+
+We first download both training and testing datasets:
+
+```{r Loading Data}
+set.seed(138)
+
+train_Url <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_Url <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(url(train_Url), na.strings = c("NA","#DIV/0!",""))
+testing <- read.csv(url(test_Url), na.strings = c("NA","#DIV/0!",""))
+
+dim (training)
+dim (testing)
+```
+
+We can see that the training dataset has 19622 observations and 160 variables, and the testing dataset has 20 observations and the same 160 variables. The goal is to predict the outcome of the variable **classe** in the training set.
+
+## Cleanning the data
+
+In order to clean the data, we remove the columns which have missing values:
+
+```{r Cleanning_1}
+training <- training[, colSums (is.na (training)) == 0 & colSums (is.na (testing)) == 0]
+```
+
+Then, we remove the first two columns, which are an identifier of the observation and the user name:
+
+```{r Cleanning_2}
+training <- training[, -c(1,2)]
+```
+
+And finally, we remove the columns with very little variance:
+
+```{r Cleanning_3}
+nzv <- nearZeroVar(training)
+training <- training[, -nzv]
+```
+
+Now we obtain the same columns in the testing dataset than in the training dataset except the last one, which is the target, and make sure the class of all variables are the same as in training data set:
+
+```{r Cleanning_4}
+testing <- testing[, names(training[, -length (training)])]
+testing <- rbind(training[1, -length (training)] , testing)
+testing <- testing[-1, ]
+```
+
+After all this cleanning data process, we have `r dim (training)[1]` observations in the training dataset, and `r dim (testing)[1]` observations in the testing dataset, both with `r dim (training)[2]` variables.
+
+## Spliting training dataset into two sets
+
+In order to validate the models we are going to test, we split the training data set into the real training set, and the validation set:
+
+```{r Splitting}
+train_index <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+training_set <- training[train_index, ]
+validation_set <- training[-train_index, ]
+```
+
+## Predict with Decision Trees model
+
+Now we try to fit a Decision Trees model:
+
+```{r Decision_Trees}
+DT_model <- rpart(classe ~ ., data = training_set, method="class")
+fancyRpartPlot(DT_model)
+```
+
+And predict the **clase** variable with the model:
+
+```{r Predict_DT}
+DT_prediction <- predict (DT_model, validation_set, type = "class")
+confusionMatrix (DT_prediction, validation_set$classe)
+```
+
+Here we see that the accuracy of this model is 87.54%.
+
+## Predict with Random Forest model
+
+Now we try to fit a Random Forest model:
+
+```{r Random_Forest}
+RF_model <- randomForest (classe ~ ., data = training_set)
+```
+
+And predict the **clase** variable with the model:
+
+```{r Predict_RF}
+RF_prediction <- predict (RF_model, validation_set, type = "class")
+confusionMatrix (RF_prediction, validation_set$classe)
+```
+
+This time, the accuracy is 99.88%. So the Random Forest model is better.
+
+## Predict with testing dataset
+
+Finally, we use the testing dataset to predict the **clase** variable with new data:
+
+```{r Predict_Testing}
+predict (RF_model, testing, type = "class")
+```
